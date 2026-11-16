@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project Timeline</title>
+<style>
+:root{
+  --bg:#0f1117;--panel:#171a23;--line:#262a36;--text:#e7e9ee;--mute:#8a90a2;
+  --todo:#6b7280;--doing:#3b82f6;--blocked:#ef4444;--done:#22c55e;--today:#f59e0b;
+  --row:44px;--left:240px;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text)}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:20}
+h1{font-size:18px;margin:0}
+h1 small{color:var(--mute);font-weight:400;font-size:12px;margin-left:8px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+select,button,.btn{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer;text-decoration:none}
+.btn.primary{background:#2563eb;border-color:#2563eb;font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0}
+.seg button.on{background:#2563eb}
+.stats{display:flex;gap:10px;padding:14px 20px;flex-wrap:wrap}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-width:110px}
+.stat b{display:block;font-size:20px}
+.stat span{font-size:12px;color:var(--mute)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+#msg{padding:40px 20px;color:var(--mute);text-align:center}
+
+/* Gantt */
+.gantt{margin:0 20px 30px;border:1px solid var(--line);border-radius:12px;overflow:auto;max-height:calc(100vh - 200px);background:var(--panel)}
+.grid{position:relative}
+.head{position:sticky;top:0;z-index:5;display:flex;background:var(--panel);border-bottom:1px solid var(--line)}
+.corner{position:sticky;left:0;z-index:6;width:var(--left);min-width:var(--left);background:var(--panel);border-right:1px solid var(--line);padding:8px 12px;font-size:12px;color:var(--mute)}
+.ticks{position:relative;height:44px}
+.tick{position:absolute;top:0;height:100%;border-left:1px solid var(--line);font-size:11px;color:var(--mute);padding:4px 5px;white-space:nowrap}
+.tick.month{color:var(--text);font-weight:600}
+.row{display:flex;height:var(--row);border-bottom:1px solid var(--line)}
+.row.group{height:34px;background:#1d2130}
+.label{position:sticky;left:0;z-index:4;width:var(--left);min-width:var(--left);background:inherit;background-color:var(--panel);border-right:1px solid var(--line);padding:0 12px;display:flex;align-items:center;gap:8px;font-size:13px;overflow:hidden}
+.row.group .label{background:#1d2130;font-weight:700;font-size:13px}
+.label a{color:var(--text);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.label a:hover{text-decoration:underline}
+.ava{width:22px;height:22px;border-radius:50%;flex:none}
+.lane{position:relative;flex:none}
+.bar{position:absolute;top:9px;height:26px;border-radius:6px;overflow:hidden;cursor:pointer;font-size:11px;display:flex;align-items:center;padding:0 8px;white-space:nowrap;color:#fff;min-width:6px}
+.bar .fill{position:absolute;inset:0;right:auto;background:rgba(255,255,255,.22)}
+.bar span{position:relative}
+.bar.late{outline:2px solid var(--blocked);outline-offset:1px}
+.todayline{position:absolute;top:0;bottom:0;width:2px;background:var(--today);z-index:3;pointer-events:none}
+.todayline::after{content:"今天";white-space:nowrap;position:sticky;top:46px;font-size:10px;color:var(--today);margin-left:4px}
+.wkend{position:absolute;top:0;bottom:0;background:rgba(255,255,255,.025);pointer-events:none}
+
+/* List */
+.list{margin:0 20px 30px;display:grid;gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;grid-template-columns:1fr auto;gap:6px;text-decoration:none;color:var(--text)}
+.card:hover{border-color:#3b4256}
+.card .t{font-weight:600}
+.card .m{font-size:12px;color:var(--mute)}
+.pbar{grid-column:1/-1;height:6px;background:var(--line);border-radius:4px;overflow:hidden}
+.pbar i{display:block;height:100%}
+.pill{font-size:11px;padding:2px 8px;border-radius:20px;color:#fff;align-self:start}
+
+/* popup */
+#pop{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+#pop .box{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:480px;width:100%;padding:18px}
+#pop h3{margin:0 0 10px}
+#pop .kv{display:grid;grid-template-columns:80px 1fr;gap:6px;font-size:14px;margin-bottom:12px}
+#pop .kv div:nth-child(odd){color:var(--mute)}
+#pop .notes{white-space:pre-wrap;font-size:13px;color:#c9ccd6;background:var(--bg);padding:10px;border-radius:8px;max-height:200px;overflow:auto;margin-bottom:14px}
+@media (max-width:640px){:root{--left:150px}header{padding:12px}.stats,.gantt,.list{margin-left:10px;margin-right:10px}.stats{padding:10px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>📅 Project Timeline <small id="repoName"></small></h1>
+  <div class="controls">
+    <select id="fProject"><option value="">全部项目</option></select>
+    <select id="fPerson"><option value="">全部人</option></select>
+    <select id="fStatus">
+      <option value="">全部状态</option><option>未开始</option><option>进行中</option><option>卡住</option><option>已完成</option>
+    </select>
+    <div class="seg" id="view"><button data-v="gantt" class="on">时间线</button><button data-v="list">列表</button></div>
+    <div class="seg" id="zoom"><button data-z="day">日</button><button data-z="week" class="on">周</button><button data-z="month">月</button></div>
+    <button id="refresh" title="重新载入">⟳</button>
+    <a class="btn primary" id="newTask" target="_blank">＋ 新任务</a>
+  </div>
+</header>
+<div class="stats" id="stats"></div>
+<div id="msg">载入中…</div>
+<div class="gantt" id="gantt" hidden></div>
+<div class="list" id="list" hidden></div>
+<div id="pop"><div class="box" id="popBox"></div></div>
+
+<script>
+/* ===== 设定：放到 GitHub Pages 会自动识别仓库；本地打开时用这里的值 ===== */
+const FALLBACK_REPO = "moonsiao/project-timeline";
+
+const REPO = (() => {
+  const h = location.hostname.match(/^([^.]+)\.github\.io$/);
+  const seg = location.pathname.split("/").filter(Boolean)[0];
+  return h && seg ? `${h[1]}/${seg}` : FALLBACK_REPO;
+})();
+const STATUS = {
+  "未开始":{c:"var(--todo)"}, "进行中":{c:"var(--doing)"},
+  "卡住":{c:"var(--blocked)"}, "已完成":{c:"var(--done)"}
+};
+const DAY = 86400000;
+let tasks = [], view = "gantt", zoom = "week";
+
+document.getElementById("repoName").textContent = REPO;
+document.getElementById("newTask").href = `https://github.com/${REPO}/issues/new?template=task.yml`;
+
+function parseBody(body=""){
+  const out = {};
+  body.split(/^###\s+/m).slice(1).forEach(sec=>{
+    const [k,...rest] = sec.split("\n");
+    let v = rest.join("\n").trim();
+    if (v === "_No response_") v = "";
+    out[k.trim()] = v;
+  });
+  return out;
+}
+function toDate(s){ const m=(s||"").match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/); return m? new Date(+m[1],m[2]-1,+m[3]) : null; }
+const fmt = d => d ? `${d.getMonth()+1}/${d.getDate()}` : "—";
+const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+async function load(force){
+  const key = "pt_cache_"+REPO;
+  try{
+    const c = JSON.parse(localStorage.getItem(key)||"null");
+    if (!force && c && Date.now()-c.t < 120000){ tasks=c.d; return render(); }
+  }catch(e){}
+  try{
+    let all=[], page=1;
+    while(page<=5){
+      const r = await fetch(`https://api.github.com/repos/${REPO}/issues?state=all&per_page=100&page=${page}`);
+      if (!r.ok) throw new Error(r.status===403 ? "GitHub 访问次数暂时用完，请几分钟后再刷新" : r.status===404 ? `找不到仓库 ${REPO}（要设为 Public）` : "载入失败 "+r.status);
+      const d = await r.json(); all = all.concat(d);
+      if (d.length<100) break; page++;
+    }
+    tasks = all.filter(i=>!i.pull_request).map(i=>{
+      const f = parseBody(i.body);
+      let status = f["状态"] || "未开始";
+      if (i.state==="closed") status = "已完成";
+      let progress = parseInt(f["进度"]) || 0;
+      if (status==="已完成") progress = 100;
+      const start = toDate(f["开始日期"]), due = toDate(f["截止日期"]) || start;
+      return {
+        n:i.number, title:i.title, url:i.html_url, project:f["项目"]||"未分类",
+        start: start||due, due, status, progress, notes:f["备注"]||"",
+        people: i.assignees.length ? i.assignees : [i.user],
+        updated: i.updated_at
+      };
+    });
+    try{ localStorage.setItem(key, JSON.stringify({t:Date.now(), d:tasks})); }catch(e){}
+    tasks.forEach(t=>{ t.start=t.start&&new Date(t.start); t.due=t.due&&new Date(t.due); });
+    render();
+  }catch(e){ showMsg("⚠️ "+e.message); }
+}
+function hydrate(){ tasks.forEach(t=>{ if(t.start&&!(t.start instanceof Date)) t.start=new Date(t.start); if(t.due&&!(t.due instanceof Date)) t.due=new Date(t.due); }); }
+function showMsg(m){ const e=document.getElementById("msg"); e.hidden=false; e.innerHTML=m; document.getElementById("gantt").hidden=true; document.getElementById("list").hidden=true; }
+
+function filtered(){
+  const p=fProject.value, u=fPerson.value, s=fStatus.value;
+  return tasks.filter(t=>(!p||t.project===p)&&(!u||t.people.some(x=>x.login===u))&&(!s||t.status===s));
+}
+function fillFilters(){
+  const keep=(sel,vals,first)=>{ const v=sel.value; sel.innerHTML=`<option value="">${first}</option>`+vals.map(x=>`<option>${esc(x)}</option>`).join(""); sel.value=vals.includes(v)?v:""; };
+  keep(fProject,[...new Set(tasks.map(t=>t.project))].sort(),"全部项目");
+  keep(fPerson,[...new Set(tasks.flatMap(t=>t.people.map(p=>p.login)))].sort(),"全部人");
+}
+const isLate = t => t.status!=="已完成" && t.due && t.due < new Date(new Date().toDateString());
+
+function render(){
+  hydrate(); fillFilters();
+  const list = filtered();
+  const cnt = s => list.filter(t=>t.status===s).length;
+  stats.innerHTML = `
+    <div class="stat"><b>${list.length}</b><span>任务</span></div>
+    ${Object.keys(STATUS).map(s=>`<div class="stat"><b>${cnt(s)}</b><span><i class="dot" style="background:${STATUS[s].c}"></i>${s}</span></div>`).join("")}
+    <div class="stat"><b style="color:var(--blocked)">${list.filter(isLate).length}</b><span>已逾期</span></div>`;
+  if (!tasks.length) return showMsg(`还没有任务。点 <b>＋ 新任务</b> 开始。`);
+  if (!list.length) return showMsg("没有符合筛选的任务");
+  msg.hidden=true;
+  gantt.hidden = view!=="gantt"; document.getElementById("list").hidden = view!=="list";
+  view==="gantt" ? renderGantt(list) : renderList(list);
+}
+
+function groups(list){
+  const g={}; list.forEach(t=>(g[t.project]??=[]).push(t));
+  Object.values(g).forEach(a=>a.sort((x,y)=>(x.start||0)-(y.start||0)));
+  return Object.entries(g).sort((a,b)=>a[0].localeCompare(b[0]));
+}
+
+function renderGantt(list){
+  const px = {day:36, week:14, month:4}[zoom];
+  const dated = list.filter(t=>t.start);
+  const today = new Date(new Date().toDateString());
+  let min = new Date(Math.min(today, ...dated.map(t=>t.start)));
+  let max = new Date(Math.max(today, ...dated.map(t=>t.due)));
+  min = new Date(min.getFullYear(), min.getMonth(), 1);
+  max = new Date(max.getFullYear(), max.getMonth()+1, 0);
+  const days = Math.round((max-min)/DAY)+1, W = days*px;
+  const x = d => Math.round((d-min)/DAY)*px;
+
+  let ticks="", shade="";
+  for(let i=0;i<days;i++){
+    const d = new Date(min.getFullYear(), min.getMonth(), min.getDate()+i);
+    if (d.getDate()===1) ticks += `<div class="tick month" style="left:${i*px}px">${d.getFullYear()}年${d.getMonth()+1}月</div>`;
+    else if (zoom==="day") ticks += `<div class="tick" style="left:${i*px}px;top:20px;height:24px">${d.getDate()}</div>`;
+    else if (zoom==="week" && d.getDay()===1) ticks += `<div class="tick" style="left:${i*px}px;top:20px;height:24px">${d.getDate()}</div>`;
+    if (zoom!=="month" && (d.getDay()===0||d.getDay()===6)) shade += `<div class="wkend" style="left:${i*px}px;width:${px}px"></div>`;
+  }
+
+  let rows="";
+  for (const [proj, arr] of groups(list)){
+    const s = arr.filter(t=>t.start), done = arr.filter(t=>t.status==="已完成").length;
+    rows += `<div class="row group"><div class="label">📁 ${esc(proj)} <span style="color:var(--mute);font-weight:400">${done}/${arr.length}</span></div><div class="lane" style="width:${W}px">
+      ${s.length? `<div class="bar" style="left:${x(new Date(Math.min(...s.map(t=>t.start))))}px;width:${x(new Date(Math.max(...s.map(t=>t.due))))-x(new Date(Math.min(...s.map(t=>t.start))))+px}px;top:12px;height:10px;background:#3b4256;padding:0"></div>`:""}
+    </div></div>`;
+    for (const t of arr){
+      const p = t.people[0];
+      const bar = t.start ? (()=>{
+        const L=x(t.start), w=Math.max(px, x(t.due)-L+px);
+        return `<div class="bar ${isLate(t)?"late":""}" data-n="${t.n}" style="left:${L}px;width:${w}px;background:${STATUS[t.status]?.c||"var(--todo)"}">
+          <div class="fill" style="width:${t.progress}%"></div><span>${t.progress}% · ${esc(t.title)}</span></div>`;
+      })() : "";
+      rows += `<div class="row"><div class="label"><img class="ava" src="${p.avatar_url}&s=44" title="${esc(p.login)}"><a href="${t.url}" target="_blank" title="${esc(t.title)}">${esc(t.title)}</a></div><div class="lane" style="width:${W}px">${bar}</div></div>`;
+    }
+  }
+  gantt.innerHTML = `<div class="grid" style="width:calc(var(--left) + ${W}px)">
+    <div class="head"><div class="corner">任务</div><div class="ticks" style="width:${W}px">${ticks}</div></div>
+    <div style="position:relative">${rows}
+      <div style="position:absolute;top:0;bottom:0;left:var(--left);width:${W}px;pointer-events:none">${shade}<div class="todayline" style="left:${x(today)+px/2}px"></div></div>
+    </div></div>`;
+  gantt.querySelectorAll(".bar[data-n]").forEach(b=>b.onclick=()=>openPop(+b.dataset.n));
+  // 自动滚到今天
+  gantt.scrollLeft = Math.max(0, x(today) - gantt.clientWidth/3);
+}
+
+function renderList(list){
+  const order={"卡住":0,"进行中":1,"未开始":2,"已完成":3};
+  const arr=[...list].sort((a,b)=>(order[a.status]-order[b.status])||((a.due||0)-(b.due||0)));
+  document.getElementById("list").innerHTML = arr.map(t=>`
+    <a class="card" href="#" data-n="${t.n}">
+      <div><div class="t">${esc(t.title)}</div>
+      <div class="m">📁 ${esc(t.project)} · 👤 ${t.people.map(p=>esc(p.login)).join(", ")} · 📅 ${fmt(t.start)} → ${fmt(t.due)} ${isLate(t)?'<b style="color:var(--blocked)">逾期</b>':""}</div></div>
+      <span class="pill" style="background:${STATUS[t.status]?.c}">${t.status}</span>
+      <div class="pbar"><i style="width:${t.progress}%;background:${STATUS[t.status]?.c}"></i></div>
+    </a>`).join("");
+  document.querySelectorAll(".card").forEach(c=>c.onclick=e=>{e.preventDefault();openPop(+c.dataset.n)});
+}
+
+function openPop(n){
+  const t = tasks.find(t=>t.n===n);
+  popBox.innerHTML = `<h3>${esc(t.title)}</h3>
+    <div class="kv">
+      <div>项目</div><div>${esc(t.project)}</div>
+      <div>负责人</div><div>${t.people.map(p=>esc(p.login)).join(", ")}</div>
+      <div>时间</div><div>${fmt(t.start)} → ${fmt(t.due)} ${isLate(t)?'<b style="color:var(--blocked)">逾期</b>':""}</div>
+      <div>状态</div><div><span class="pill" style="background:${STATUS[t.status]?.c}">${t.status}</span> ${t.progress}%</div>
+    </div>
+    ${t.notes?`<div class="notes">${esc(t.notes)}</div>`:""}
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="pop.style.display='none'">关闭</button>
+      <a class="btn primary" href="${t.url}" target="_blank">在 GitHub 更新 / 留言</a>
+    </div>`;
+  pop.style.display="flex";
+}
+pop.onclick = e => { if(e.target===pop) pop.style.display="none"; };
+
+[fProject,fPerson,fStatus].forEach(s=>s.onchange=render);
+document.querySelectorAll("#view button").forEach(b=>b.onclick=()=>{view=b.dataset.v;document.querySelectorAll("#view button").forEach(x=>x.classList.toggle("on",x===b));render();});
+document.querySelectorAll("#zoom button").forEach(b=>b.onclick=()=>{zoom=b.dataset.z;document.querySelectorAll("#zoom button").forEach(x=>x.classList.toggle("on",x===b));render();});
+refresh.onclick=()=>load(true);
+load();
+</script>
+</body>
+</html>

@@ -7,7 +7,7 @@ body:
     attributes:
       label: 项目 Project
       description: 同名会分在一组 / Same name = same group
-      placeholder: 3CC Event
+      value: h.ai
     validations:
       required: true
   - type: input

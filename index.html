@@ -49,7 +49,7 @@ select,button,.btn{background:var(--panel);color:var(--text);border:1px solid va
 .bar span{position:relative}
 .bar.late{outline:2px solid var(--blocked);outline-offset:1px}
 .todayline{position:absolute;top:0;bottom:0;width:2px;background:var(--today);z-index:3;pointer-events:none}
-.todayline::after{content:"今天";white-space:nowrap;position:sticky;top:46px;font-size:10px;color:var(--today);margin-left:4px}
+.todayline::after{content:var(--today-label,"Today");white-space:nowrap;position:sticky;top:46px;font-size:10px;color:var(--today);margin-left:4px}
 .wkend{position:absolute;top:0;bottom:0;background:rgba(255,255,255,.025);pointer-events:none}
 
 /* List */
@@ -78,17 +78,16 @@ select,button,.btn{background:var(--panel);color:var(--text);border:1px solid va
   <div class="controls">
     <select id="fProject"><option value="">全部项目</option></select>
     <select id="fPerson"><option value="">全部人</option></select>
-    <select id="fStatus">
-      <option value="">全部状态</option><option>未开始</option><option>进行中</option><option>卡住</option><option>已完成</option>
-    </select>
-    <div class="seg" id="view"><button data-v="gantt" class="on">时间线</button><button data-v="list">列表</button></div>
-    <div class="seg" id="zoom"><button data-z="day">日</button><button data-z="week" class="on">周</button><button data-z="month">月</button></div>
-    <button id="refresh" title="重新载入">⟳</button>
-    <a class="btn primary" id="newTask" target="_blank">＋ 新任务</a>
+    <select id="fStatus"></select>
+    <div class="seg" id="view"><button data-v="gantt" class="on" data-i="timeline"></button><button data-v="list" data-i="list"></button></div>
+    <div class="seg" id="zoom"><button data-z="day" data-i="day"></button><button data-z="week" class="on" data-i="week"></button><button data-z="month" data-i="month"></button></div>
+    <button id="refresh" title="Reload">⟳</button>
+    <button id="lang"></button>
+    <a class="btn primary" id="newTask" target="_blank" data-i="newTask"></a>
   </div>
 </header>
 <div class="stats" id="stats"></div>
-<div id="msg">载入中…</div>
+<div id="msg">…</div>
 <div class="gantt" id="gantt" hidden></div>
 <div class="list" id="list" hidden></div>
 <div id="pop"><div class="box" id="popBox"></div></div>
@@ -102,10 +101,37 @@ const REPO = (() => {
   const seg = location.pathname.split("/").filter(Boolean)[0];
   return h && seg ? `${h[1]}/${seg}` : FALLBACK_REPO;
 })();
-const STATUS = {
-  "未开始":{c:"var(--todo)"}, "进行中":{c:"var(--doing)"},
-  "卡住":{c:"var(--blocked)"}, "已完成":{c:"var(--done)"}
+const STATUS = { todo:{c:"var(--todo)"}, doing:{c:"var(--doing)"}, blocked:{c:"var(--blocked)"}, done:{c:"var(--done)"} };
+const I18N = {
+  zh:{timeline:"时间线",list:"列表",day:"日",week:"周",month:"月",newTask:"＋ 新任务",allProj:"全部项目",allPeople:"全部人",allStatus:"全部状态",
+      todo:"未开始",doing:"进行中",blocked:"卡住",done:"已完成",tasks:"任务",late:"已逾期",lateTag:"逾期",task:"任务",today:"今天",
+      empty:"还没有任务。点 <b>＋ 新任务</b> 开始。",nomatch:"没有符合筛选的任务",project:"项目",owner:"负责人",time:"时间",status:"状态",
+      close:"关闭",edit:"在 GitHub 更新 / 留言",uncat:"未分类",ym:(y,m)=>`${y}年${m}月`,
+      e403:"GitHub 访问次数暂时用完，请几分钟后再刷新",e404:r=>`找不到仓库 ${r}（要设为 Public）`,efail:"载入失败 ",langBtn:"EN"},
+  en:{timeline:"Timeline",list:"List",day:"Day",week:"Week",month:"Month",newTask:"＋ New Task",allProj:"All projects",allPeople:"All people",allStatus:"All status",
+      todo:"Not started",doing:"In progress",blocked:"Blocked",done:"Done",tasks:"Tasks",late:"Overdue",lateTag:"Overdue",task:"Task",today:"Today",
+      empty:"No tasks yet. Click <b>＋ New Task</b> to start.",nomatch:"No tasks match the filters",project:"Project",owner:"Owner",time:"Dates",status:"Status",
+      close:"Close",edit:"Update / comment on GitHub",uncat:"Uncategorized",ym:(y,m)=>new Date(y,m-1).toLocaleString("en",{month:"short",year:"numeric"}),
+      e403:"GitHub rate limit reached, please refresh in a few minutes",e404:r=>`Repo ${r} not found (must be Public)`,efail:"Load failed ",langBtn:"中文"}
 };
+let lang = (()=>{ try{ return localStorage.getItem("pt_lang") || (navigator.language.startsWith("zh")?"zh":"en"); }catch(e){ return "zh"; } })();
+const T = k => I18N[lang][k];
+function applyLang(){
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i]").forEach(e=>e.textContent=T(e.dataset.i));
+  document.getElementById("lang").textContent = T("langBtn");
+  const v=fStatus.value;
+  fStatus.innerHTML = `<option value="">${T("allStatus")}</option>` + Object.keys(STATUS).map(k=>`<option value="${k}">${T(k)}</option>`).join("");
+  fStatus.value=v;
+  document.documentElement.style.setProperty("--today-label", `"${T("today")}"`);
+}
+function statusCode(s=""){
+  s=s.toLowerCase();
+  if (/已完成|done|complete/.test(s)) return "done";
+  if (/卡住|block/.test(s)) return "blocked";
+  if (/进行中|progress|doing/.test(s)) return "doing";
+  return "todo";
+}
 const DAY = 86400000;
 let tasks = [], view = "gantt", zoom = "week";
 
@@ -113,12 +139,12 @@ document.getElementById("repoName").textContent = REPO;
 document.getElementById("newTask").href = `https://github.com/${REPO}/issues/new?template=task.yml`;
 
 function parseBody(body=""){
-  const out = {};
+  const out = {}, keys = {project:/项目|project/i, start:/开始|start/i, due:/截止|due|end/i, status:/状态|status/i, progress:/进度|progress/i, notes:/备注|notes?/i};
   body.split(/^###\s+/m).slice(1).forEach(sec=>{
     const [k,...rest] = sec.split("\n");
     let v = rest.join("\n").trim();
     if (v === "_No response_") v = "";
-    out[k.trim()] = v;
+    for (const [key,re] of Object.entries(keys)) if (re.test(k) && !(key in out)) { out[key]=v; break; }
   });
   return out;
 }
@@ -127,7 +153,7 @@ const fmt = d => d ? `${d.getMonth()+1}/${d.getDate()}` : "—";
 const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 async function load(force){
-  const key = "pt_cache_"+REPO;
+  const key = "pt_cache2_"+REPO;
   try{
     const c = JSON.parse(localStorage.getItem(key)||"null");
     if (!force && c && Date.now()-c.t < 120000){ tasks=c.d; return render(); }
@@ -136,20 +162,20 @@ async function load(force){
     let all=[], page=1;
     while(page<=5){
       const r = await fetch(`https://api.github.com/repos/${REPO}/issues?state=all&per_page=100&page=${page}`);
-      if (!r.ok) throw new Error(r.status===403 ? "GitHub 访问次数暂时用完，请几分钟后再刷新" : r.status===404 ? `找不到仓库 ${REPO}（要设为 Public）` : "载入失败 "+r.status);
+      if (!r.ok) throw new Error(r.status===403 ? T("e403") : r.status===404 ? T("e404")(REPO) : T("efail")+r.status);
       const d = await r.json(); all = all.concat(d);
       if (d.length<100) break; page++;
     }
     tasks = all.filter(i=>!i.pull_request).map(i=>{
       const f = parseBody(i.body);
-      let status = f["状态"] || "未开始";
-      if (i.state==="closed") status = "已完成";
-      let progress = parseInt(f["进度"]) || 0;
-      if (status==="已完成") progress = 100;
-      const start = toDate(f["开始日期"]), due = toDate(f["截止日期"]) || start;
+      let status = statusCode(f.status);
+      if (i.state==="closed") status = "done";
+      let progress = parseInt(f.progress) || 0;
+      if (status==="done") progress = 100;
+      const start = toDate(f.start), due = toDate(f.due) || start;
       return {
-        n:i.number, title:i.title, url:i.html_url, project:f["项目"]||"未分类",
-        start: start||due, due, status, progress, notes:f["备注"]||"",
+        n:i.number, title:i.title, url:i.html_url, project:f.project||"",
+        start: start||due, due, status, progress, notes:f.notes||"",
         people: i.assignees.length ? i.assignees : [i.user],
         updated: i.updated_at
       };
@@ -168,21 +194,21 @@ function filtered(){
 }
 function fillFilters(){
   const keep=(sel,vals,first)=>{ const v=sel.value; sel.innerHTML=`<option value="">${first}</option>`+vals.map(x=>`<option>${esc(x)}</option>`).join(""); sel.value=vals.includes(v)?v:""; };
-  keep(fProject,[...new Set(tasks.map(t=>t.project))].sort(),"全部项目");
-  keep(fPerson,[...new Set(tasks.flatMap(t=>t.people.map(p=>p.login)))].sort(),"全部人");
+  keep(fProject,[...new Set(tasks.map(t=>t.project))].sort(),T("allProj"));
+  keep(fPerson,[...new Set(tasks.flatMap(t=>t.people.map(p=>p.login)))].sort(),T("allPeople"));
 }
-const isLate = t => t.status!=="已完成" && t.due && t.due < new Date(new Date().toDateString());
+const isLate = t => t.status!=="done" && t.due && t.due < new Date(new Date().toDateString());
 
 function render(){
   hydrate(); fillFilters();
   const list = filtered();
   const cnt = s => list.filter(t=>t.status===s).length;
   stats.innerHTML = `
-    <div class="stat"><b>${list.length}</b><span>任务</span></div>
-    ${Object.keys(STATUS).map(s=>`<div class="stat"><b>${cnt(s)}</b><span><i class="dot" style="background:${STATUS[s].c}"></i>${s}</span></div>`).join("")}
-    <div class="stat"><b style="color:var(--blocked)">${list.filter(isLate).length}</b><span>已逾期</span></div>`;
-  if (!tasks.length) return showMsg(`还没有任务。点 <b>＋ 新任务</b> 开始。`);
-  if (!list.length) return showMsg("没有符合筛选的任务");
+    <div class="stat"><b>${list.length}</b><span>${T("tasks")}</span></div>
+    ${Object.keys(STATUS).map(s=>`<div class="stat"><b>${cnt(s)}</b><span><i class="dot" style="background:${STATUS[s].c}"></i>${T(s)}</span></div>`).join("")}
+    <div class="stat"><b style="color:var(--blocked)">${list.filter(isLate).length}</b><span>${T("late")}</span></div>`;
+  if (!tasks.length) return showMsg(T("empty"));
+  if (!list.length) return showMsg(T("nomatch"));
   msg.hidden=true;
   gantt.hidden = view!=="gantt"; document.getElementById("list").hidden = view!=="list";
   view==="gantt" ? renderGantt(list) : renderList(list);
@@ -208,7 +234,7 @@ function renderGantt(list){
   let ticks="", shade="";
   for(let i=0;i<days;i++){
     const d = new Date(min.getFullYear(), min.getMonth(), min.getDate()+i);
-    if (d.getDate()===1) ticks += `<div class="tick month" style="left:${i*px}px">${d.getFullYear()}年${d.getMonth()+1}月</div>`;
+    if (d.getDate()===1) ticks += `<div class="tick month" style="left:${i*px}px">${T("ym")(d.getFullYear(),d.getMonth()+1)}</div>`;
     else if (zoom==="day") ticks += `<div class="tick" style="left:${i*px}px;top:20px;height:24px">${d.getDate()}</div>`;
     else if (zoom==="week" && d.getDay()===1) ticks += `<div class="tick" style="left:${i*px}px;top:20px;height:24px">${d.getDate()}</div>`;
     if (zoom!=="month" && (d.getDay()===0||d.getDay()===6)) shade += `<div class="wkend" style="left:${i*px}px;width:${px}px"></div>`;
@@ -216,8 +242,8 @@ function renderGantt(list){
 
   let rows="";
   for (const [proj, arr] of groups(list)){
-    const s = arr.filter(t=>t.start), done = arr.filter(t=>t.status==="已完成").length;
-    rows += `<div class="row group"><div class="label">📁 ${esc(proj)} <span style="color:var(--mute);font-weight:400">${done}/${arr.length}</span></div><div class="lane" style="width:${W}px">
+    const s = arr.filter(t=>t.start), done = arr.filter(t=>t.status==="done").length;
+    rows += `<div class="row group"><div class="label">📁 ${esc(proj||T("uncat"))} <span style="color:var(--mute);font-weight:400">${done}/${arr.length}</span></div><div class="lane" style="width:${W}px">
       ${s.length? `<div class="bar" style="left:${x(new Date(Math.min(...s.map(t=>t.start))))}px;width:${x(new Date(Math.max(...s.map(t=>t.due))))-x(new Date(Math.min(...s.map(t=>t.start))))+px}px;top:12px;height:10px;background:#3b4256;padding:0"></div>`:""}
     </div></div>`;
     for (const t of arr){
@@ -231,7 +257,7 @@ function renderGantt(list){
     }
   }
   gantt.innerHTML = `<div class="grid" style="width:calc(var(--left) + ${W}px)">
-    <div class="head"><div class="corner">任务</div><div class="ticks" style="width:${W}px">${ticks}</div></div>
+    <div class="head"><div class="corner">${T("task")}</div><div class="ticks" style="width:${W}px">${ticks}</div></div>
     <div style="position:relative">${rows}
       <div style="position:absolute;top:0;bottom:0;left:var(--left);width:${W}px;pointer-events:none">${shade}<div class="todayline" style="left:${x(today)+px/2}px"></div></div>
     </div></div>`;
@@ -241,13 +267,13 @@ function renderGantt(list){
 }
 
 function renderList(list){
-  const order={"卡住":0,"进行中":1,"未开始":2,"已完成":3};
+  const order={blocked:0,doing:1,todo:2,done:3};
   const arr=[...list].sort((a,b)=>(order[a.status]-order[b.status])||((a.due||0)-(b.due||0)));
   document.getElementById("list").innerHTML = arr.map(t=>`
     <a class="card" href="#" data-n="${t.n}">
       <div><div class="t">${esc(t.title)}</div>
-      <div class="m">📁 ${esc(t.project)} · 👤 ${t.people.map(p=>esc(p.login)).join(", ")} · 📅 ${fmt(t.start)} → ${fmt(t.due)} ${isLate(t)?'<b style="color:var(--blocked)">逾期</b>':""}</div></div>
-      <span class="pill" style="background:${STATUS[t.status]?.c}">${t.status}</span>
+      <div class="m">📁 ${esc(t.project||T("uncat"))} · 👤 ${t.people.map(p=>esc(p.login)).join(", ")} · 📅 ${fmt(t.start)} → ${fmt(t.due)} ${isLate(t)?`<b style="color:var(--blocked)">${T("lateTag")}</b>`:""}</div></div>
+      <span class="pill" style="background:${STATUS[t.status]?.c}">${T(t.status)}</span>
       <div class="pbar"><i style="width:${t.progress}%;background:${STATUS[t.status]?.c}"></i></div>
     </a>`).join("");
   document.querySelectorAll(".card").forEach(c=>c.onclick=e=>{e.preventDefault();openPop(+c.dataset.n)});
@@ -257,15 +283,15 @@ function openPop(n){
   const t = tasks.find(t=>t.n===n);
   popBox.innerHTML = `<h3>${esc(t.title)}</h3>
     <div class="kv">
-      <div>项目</div><div>${esc(t.project)}</div>
-      <div>负责人</div><div>${t.people.map(p=>esc(p.login)).join(", ")}</div>
-      <div>时间</div><div>${fmt(t.start)} → ${fmt(t.due)} ${isLate(t)?'<b style="color:var(--blocked)">逾期</b>':""}</div>
-      <div>状态</div><div><span class="pill" style="background:${STATUS[t.status]?.c}">${t.status}</span> ${t.progress}%</div>
+      <div>${T("project")}</div><div>${esc(t.project||T("uncat"))}</div>
+      <div>${T("owner")}</div><div>${t.people.map(p=>esc(p.login)).join(", ")}</div>
+      <div>${T("time")}</div><div>${fmt(t.start)} → ${fmt(t.due)} ${isLate(t)?`<b style="color:var(--blocked)">${T("lateTag")}</b>`:""}</div>
+      <div>${T("status")}</div><div><span class="pill" style="background:${STATUS[t.status]?.c}">${T(t.status)}</span> ${t.progress}%</div>
     </div>
     ${t.notes?`<div class="notes">${esc(t.notes)}</div>`:""}
     <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button onclick="pop.style.display='none'">关闭</button>
-      <a class="btn primary" href="${t.url}" target="_blank">在 GitHub 更新 / 留言</a>
+      <button onclick="pop.style.display='none'">${T("close")}</button>
+      <a class="btn primary" href="${t.url}" target="_blank">${T("edit")}</a>
     </div>`;
   pop.style.display="flex";
 }
@@ -275,6 +301,8 @@ pop.onclick = e => { if(e.target===pop) pop.style.display="none"; };
 document.querySelectorAll("#view button").forEach(b=>b.onclick=()=>{view=b.dataset.v;document.querySelectorAll("#view button").forEach(x=>x.classList.toggle("on",x===b));render();});
 document.querySelectorAll("#zoom button").forEach(b=>b.onclick=()=>{zoom=b.dataset.z;document.querySelectorAll("#zoom button").forEach(x=>x.classList.toggle("on",x===b));render();});
 refresh.onclick=()=>load(true);
+document.getElementById("lang").onclick=()=>{ lang = lang==="zh"?"en":"zh"; try{localStorage.setItem("pt_lang",lang);}catch(e){} applyLang(); if(tasks.length) render(); else load(); };
+applyLang();
 load();
 </script>
 </body>

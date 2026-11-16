@@ -12,7 +12,11 @@
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text)}
-header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:20}
+header{padding:14px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:20;display:flex;flex-direction:column;gap:12px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.actions{display:flex;gap:8px;align-items:center;flex:none}
+.filters{display:flex;gap:8px}
+#newTask b{font-weight:700;margin-right:4px}
 h1{font-size:18px;margin:0}
 h1 small{color:var(--mute);font-weight:400;font-size:12px;margin-left:8px}
 .brand{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -23,6 +27,7 @@ h1 small{color:var(--mute);font-weight:400;font-size:12px;margin-left:8px}
 .sync.err{color:#fca5a5}
 @keyframes pulse{50%{opacity:.3}}
 .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.controls .seg button{padding:7px 14px}
 select,button,.btn{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer;text-decoration:none}
 .btn.primary{background:#2563eb;border-color:#2563eb;font-weight:600}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
@@ -76,21 +81,68 @@ select,button,.btn{background:var(--panel);color:var(--text);border:1px solid va
 #pop .kv{display:grid;grid-template-columns:80px 1fr;gap:6px;font-size:14px;margin-bottom:12px}
 #pop .kv div:nth-child(odd){color:var(--mute)}
 #pop .notes{white-space:pre-wrap;font-size:13px;color:#c9ccd6;background:var(--bg);padding:10px;border-radius:8px;max-height:200px;overflow:auto;margin-bottom:14px}
-@media (max-width:640px){:root{--left:150px}header{padding:12px}.stats,.gantt,.list{margin-left:10px;margin-right:10px}.stats{padding:10px}}
+@media (max-width:640px){
+  :root{--left:118px;--row:48px}
+  header{padding:10px 12px 8px;gap:10px}
+  h1{font-size:16px}
+  h1 small{display:none}
+  .brand{gap:8px;flex-wrap:nowrap;min-width:0}
+  .brand h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sync{order:2;padding:4px 8px}
+  .sync span{display:none}
+  .icon{width:36px;height:36px;padding:0;display:flex;align-items:center;justify-content:center}
+  /* 新任务变成右下角圆形按钮 */
+  #newTask{position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom));width:58px;height:58px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 8px 24px rgba(37,99,235,.45);z-index:30}
+  #newTask b{margin:0}
+  #newTask span{display:none}
+  .controls{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -12px;padding:0 12px;gap:8px}
+  .controls::-webkit-scrollbar{display:none}
+  .controls>*{flex:none}
+  .controls .seg button{padding:8px 12px}
+  select{padding:8px 10px;border-radius:20px;max-width:150px}
+  body.v-list #zoom{display:none}
+  /* 统计变成一行可横滑的小胶囊 */
+  .stats{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:8px;padding:10px 12px}
+  .stats::-webkit-scrollbar{display:none}
+  .stat{flex:none;min-width:0;padding:6px 12px;border-radius:20px;display:flex;align-items:center;gap:6px}
+  .stat b{font-size:15px;display:inline}
+  .stat span{font-size:12px}
+  .gantt{margin:0 0 90px;border-radius:0;border-left:0;border-right:0;max-height:none}
+  .label{padding:0 8px;font-size:12px;gap:6px}
+  .ava{width:18px;height:18px}
+  .bar{font-size:10px;padding:0 6px;top:11px;height:26px}
+  .list{margin:0 12px 90px;gap:10px}
+  .card{padding:14px;border-radius:14px}
+  .card .t{font-size:15px}
+  .card .m{line-height:1.7}
+  /* 详情从底部弹出 */
+  #pop{align-items:flex-end;padding:0}
+  #pop .box{border-radius:18px 18px 0 0;max-width:none;padding:20px 18px calc(20px + env(safe-area-inset-bottom));animation:up .2s ease}
+  #pop .box .btns{flex-direction:column-reverse}
+  #pop .box .btns>*{width:100%;text-align:center;padding:12px}
+  #msg{padding:60px 20px}
+}
+@keyframes up{from{transform:translateY(40px);opacity:0}}
 </style>
 </head>
 <body>
 <header>
-  <div class="brand"><div id="sync" class="sync syncing"><i></i><span></span></div><h1>📅 Project Timeline <small id="repoName"></small></h1></div>
+  <div class="top">
+    <div class="brand"><div id="sync" class="sync syncing"><i></i><span></span></div><h1>📅 Project Timeline <small id="repoName"></small></h1></div>
+    <div class="actions">
+      <button id="refresh" class="icon" title="Reload">⟳</button>
+      <button id="lang" class="icon"></button>
+      <a class="btn primary" id="newTask" target="_blank"><b>＋</b><span data-i="newTask"></span></a>
+    </div>
+  </div>
   <div class="controls">
-    <select id="fProject"><option value="">全部项目</option></select>
-    <select id="fPerson"><option value="">全部人</option></select>
-    <select id="fStatus"></select>
-    <div class="seg" id="view"><button data-v="gantt" class="on" data-i="timeline"></button><button data-v="list" data-i="list"></button></div>
+    <div class="seg" id="view"><button data-v="gantt" data-i="timeline"></button><button data-v="list" data-i="list"></button></div>
     <div class="seg" id="zoom"><button data-z="day" data-i="day"></button><button data-z="week" class="on" data-i="week"></button><button data-z="month" data-i="month"></button></div>
-    <button id="refresh" title="Reload">⟳</button>
-    <button id="lang"></button>
-    <a class="btn primary" id="newTask" target="_blank" data-i="newTask"></a>
+    <div class="filters">
+      <select id="fProject"><option value="">全部项目</option></select>
+      <select id="fPerson"><option value="">全部人</option></select>
+      <select id="fStatus"></select>
+    </div>
   </div>
 </header>
 <div class="stats" id="stats"></div>
@@ -110,12 +162,12 @@ const REPO = (() => {
 })();
 const STATUS = { todo:{c:"var(--todo)"}, doing:{c:"var(--doing)"}, blocked:{c:"var(--blocked)"}, done:{c:"var(--done)"} };
 const I18N = {
-  zh:{timeline:"时间线",list:"列表",day:"日",week:"周",month:"月",newTask:"＋ 新任务",allProj:"全部项目",allPeople:"全部人",allStatus:"全部状态",
+  zh:{timeline:"时间线",list:"列表",day:"日",week:"周",month:"月",newTask:"新任务",allProj:"全部项目",allPeople:"全部人",allStatus:"全部状态",
       todo:"未开始",doing:"进行中",blocked:"卡住",done:"已完成",tasks:"任务",late:"已逾期",lateTag:"逾期",task:"任务",today:"今天",
       empty:"还没有任务。点 <b>＋ 新任务</b> 开始。",nomatch:"没有符合筛选的任务",project:"项目",owner:"负责人",time:"时间",status:"状态",
       close:"关闭",edit:"在 GitHub 更新 / 留言",uncat:"未分类",ym:(y,m)=>`${y}年${m}月`,
       e403:"GitHub 访问次数暂时用完，请几分钟后再刷新",e404:r=>`找不到仓库 ${r}（要设为 Public）`,efail:"载入失败 ",langBtn:"EN",syncing:"同步中…",synced:"已同步",syncErr:"同步失败",justNow:"刚刚",ago:s=>s<60?`${s}秒前`:`${Math.round(s/60)}分钟前`,syncTip:"每20秒自动同步（GitHub 约有1分钟延迟）"},
-  en:{timeline:"Timeline",list:"List",day:"Day",week:"Week",month:"Month",newTask:"＋ New Task",allProj:"All projects",allPeople:"All people",allStatus:"All status",
+  en:{timeline:"Timeline",list:"List",day:"Day",week:"Week",month:"Month",newTask:"New Task",allProj:"All projects",allPeople:"All people",allStatus:"All status",
       todo:"Not started",doing:"In progress",blocked:"Blocked",done:"Done",tasks:"Tasks",late:"Overdue",lateTag:"Overdue",task:"Task",today:"Today",
       empty:"No tasks yet. Click <b>＋ New Task</b> to start.",nomatch:"No tasks match the filters",project:"Project",owner:"Owner",time:"Dates",status:"Status",
       close:"Close",edit:"Update / comment on GitHub",uncat:"Uncategorized",ym:(y,m)=>new Date(y,m-1).toLocaleString("en",{month:"short",year:"numeric"}),
@@ -140,7 +192,8 @@ function statusCode(s=""){
   return "todo";
 }
 const DAY = 86400000;
-let tasks = [], view = "gantt", zoom = "week";
+let tasks = [], zoom = "week";
+let view = (()=>{ try{ return localStorage.getItem("pt_view") || (innerWidth<=640?"list":"gantt"); }catch(e){ return "gantt"; } })();
 
 document.getElementById("repoName").textContent = REPO;
 document.getElementById("newTask").href = `https://github.com/${REPO}/issues/new?template=task.yml`;
@@ -304,7 +357,7 @@ function renderList(list){
   document.getElementById("list").innerHTML = arr.map(t=>`
     <a class="card" href="#" data-n="${t.n}">
       <div><div class="t">${esc(t.title)}</div>
-      <div class="m">📁 ${esc(t.project||T("uncat"))} · 👤 ${t.people.map(p=>esc(p.login)).join(", ")} · 📅 ${fmt(t.start)} → ${fmt(t.due)} ${isLate(t)?`<b style="color:var(--blocked)">${T("lateTag")}</b>`:""}</div></div>
+      <div class="m">📁 ${esc(t.project||T("uncat"))} · 👤 ${t.people.map(p=>esc(p.login)).join(", ")}<br>📅 ${fmt(t.start)} → ${fmt(t.due)} · ${t.progress}% ${isLate(t)?`<b style="color:var(--blocked)">${T("lateTag")}</b>`:""}</div></div>
       <span class="pill" style="background:${STATUS[t.status]?.c}">${T(t.status)}</span>
       <div class="pbar"><i style="width:${t.progress}%;background:${STATUS[t.status]?.c}"></i></div>
     </a>`).join("");
@@ -321,7 +374,7 @@ function openPop(n){
       <div>${T("status")}</div><div><span class="pill" style="background:${STATUS[t.status]?.c}">${T(t.status)}</span> ${t.progress}%</div>
     </div>
     ${t.notes?`<div class="notes">${esc(t.notes)}</div>`:""}
-    <div style="display:flex;gap:8px;justify-content:flex-end">
+    <div class="btns" style="display:flex;gap:8px;justify-content:flex-end">
       <button onclick="pop.style.display='none'">${T("close")}</button>
       <a class="btn primary" href="${t.url}" target="_blank">${T("edit")}</a>
     </div>`;
@@ -330,7 +383,9 @@ function openPop(n){
 pop.onclick = e => { if(e.target===pop) pop.style.display="none"; };
 
 [fProject,fPerson,fStatus].forEach(s=>s.onchange=render);
-document.querySelectorAll("#view button").forEach(b=>b.onclick=()=>{view=b.dataset.v;document.querySelectorAll("#view button").forEach(x=>x.classList.toggle("on",x===b));render();});
+function setView(v){ view=v; document.body.classList.toggle("v-list",v==="list"); document.querySelectorAll("#view button").forEach(x=>x.classList.toggle("on",x.dataset.v===v)); }
+setView(view);
+document.querySelectorAll("#view button").forEach(b=>b.onclick=()=>{ setView(b.dataset.v); try{localStorage.setItem("pt_view",view);}catch(e){} render(); });
 document.querySelectorAll("#zoom button").forEach(b=>b.onclick=()=>{zoom=b.dataset.z;document.querySelectorAll("#zoom button").forEach(x=>x.classList.toggle("on",x===b));render();});
 refresh.onclick=()=>load(true);
 document.getElementById("lang").onclick=()=>{ lang = lang==="zh"?"en":"zh"; try{localStorage.setItem("pt_lang",lang);}catch(e){} applyLang(); drawSync(); if(tasks.length) render(); else load(); };

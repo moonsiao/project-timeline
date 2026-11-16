@@ -15,6 +15,13 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang 
 header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:20}
 h1{font-size:18px;margin:0}
 h1 small{color:var(--mute);font-weight:400;font-size:12px;margin-left:8px}
+.brand{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.sync{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mute);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:4px 10px 4px 8px;cursor:help;white-space:nowrap}
+.sync i{width:9px;height:9px;border-radius:50%;background:var(--done);box-shadow:0 0 8px var(--done)}
+.sync.syncing i{background:var(--today);box-shadow:0 0 8px var(--today);animation:pulse 1s infinite}
+.sync.err i{background:var(--blocked);box-shadow:0 0 8px var(--blocked)}
+.sync.err{color:#fca5a5}
+@keyframes pulse{50%{opacity:.3}}
 .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 select,button,.btn{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer;text-decoration:none}
 .btn.primary{background:#2563eb;border-color:#2563eb;font-weight:600}
@@ -74,7 +81,7 @@ select,button,.btn{background:var(--panel);color:var(--text);border:1px solid va
 </head>
 <body>
 <header>
-  <h1>📅 Project Timeline <small id="repoName"></small></h1>
+  <div class="brand"><div id="sync" class="sync syncing"><i></i><span></span></div><h1>📅 Project Timeline <small id="repoName"></small></h1></div>
   <div class="controls">
     <select id="fProject"><option value="">全部项目</option></select>
     <select id="fPerson"><option value="">全部人</option></select>
@@ -107,12 +114,12 @@ const I18N = {
       todo:"未开始",doing:"进行中",blocked:"卡住",done:"已完成",tasks:"任务",late:"已逾期",lateTag:"逾期",task:"任务",today:"今天",
       empty:"还没有任务。点 <b>＋ 新任务</b> 开始。",nomatch:"没有符合筛选的任务",project:"项目",owner:"负责人",time:"时间",status:"状态",
       close:"关闭",edit:"在 GitHub 更新 / 留言",uncat:"未分类",ym:(y,m)=>`${y}年${m}月`,
-      e403:"GitHub 访问次数暂时用完，请几分钟后再刷新",e404:r=>`找不到仓库 ${r}（要设为 Public）`,efail:"载入失败 ",langBtn:"EN"},
+      e403:"GitHub 访问次数暂时用完，请几分钟后再刷新",e404:r=>`找不到仓库 ${r}（要设为 Public）`,efail:"载入失败 ",langBtn:"EN",syncing:"同步中…",synced:"已同步",syncErr:"同步失败",justNow:"刚刚",ago:s=>s<60?`${s}秒前`:`${Math.round(s/60)}分钟前`,syncTip:"每20秒自动同步（GitHub 约有1分钟延迟）"},
   en:{timeline:"Timeline",list:"List",day:"Day",week:"Week",month:"Month",newTask:"＋ New Task",allProj:"All projects",allPeople:"All people",allStatus:"All status",
       todo:"Not started",doing:"In progress",blocked:"Blocked",done:"Done",tasks:"Tasks",late:"Overdue",lateTag:"Overdue",task:"Task",today:"Today",
       empty:"No tasks yet. Click <b>＋ New Task</b> to start.",nomatch:"No tasks match the filters",project:"Project",owner:"Owner",time:"Dates",status:"Status",
       close:"Close",edit:"Update / comment on GitHub",uncat:"Uncategorized",ym:(y,m)=>new Date(y,m-1).toLocaleString("en",{month:"short",year:"numeric"}),
-      e403:"GitHub rate limit reached, please refresh in a few minutes",e404:r=>`Repo ${r} not found (must be Public)`,efail:"Load failed ",langBtn:"中文"}
+      e403:"GitHub rate limit reached, please refresh in a few minutes",e404:r=>`Repo ${r} not found (must be Public)`,efail:"Load failed ",langBtn:"中文",syncing:"Syncing…",synced:"Synced",syncErr:"Sync failed",justNow:"just now",ago:s=>s<60?`${s}s ago`:`${Math.round(s/60)}m ago`,syncTip:"Auto-syncs every 20s (GitHub may lag ~1 min)"}
 };
 let lang = (()=>{ try{ return localStorage.getItem("pt_lang") || (navigator.language.startsWith("zh")?"zh":"en"); }catch(e){ return "zh"; } })();
 const T = k => I18N[lang][k];
@@ -152,20 +159,38 @@ function toDate(s){ const m=(s||"").match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/)
 const fmt = d => d ? `${d.getMonth()+1}/${d.getDate()}` : "—";
 const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
+let etag="", lastSync=0, syncState="syncing", syncErr="";
+const POLL_MS = 20000;
+function setSync(state, err=""){ syncState=state; syncErr=err; if(state==="ok") lastSync=Date.now(); drawSync(); }
+function drawSync(){
+  const el=document.getElementById("sync"); if(!el) return;
+  el.className="sync "+syncState;
+  let txt;
+  if (syncState==="syncing") txt=T("syncing");
+  else if (syncState==="err") txt=T("syncErr");
+  else { const s=Math.round((Date.now()-lastSync)/1000); txt=T("synced")+" · "+(s<5?T("justNow"):T("ago")(s)); }
+  el.querySelector("span").textContent=txt;
+  el.title = syncErr || T("syncTip");
+}
+setInterval(drawSync, 5000);
+
 async function load(force){
-  const key = "pt_cache2_"+REPO;
+  const key = "pt_cache3_"+REPO;
+  if (!tasks.length){ try{ const c=JSON.parse(localStorage.getItem(key)||"null"); if(c){ tasks=c.d; etag=c.e||""; render(); } }catch(e){} }
+  if (force) etag="";
+  setSync("syncing");
   try{
-    const c = JSON.parse(localStorage.getItem(key)||"null");
-    if (!force && c && Date.now()-c.t < 120000){ tasks=c.d; return render(); }
-  }catch(e){}
-  try{
-    let all=[], page=1;
-    while(page<=5){
-      const r = await fetch(`https://api.github.com/repos/${REPO}/issues?state=all&per_page=100&page=${page}`);
-      if (!r.ok) throw new Error(r.status===403 ? T("e403") : r.status===404 ? T("e404")(REPO) : T("efail")+r.status);
-      const d = await r.json(); all = all.concat(d);
-      if (d.length<100) break; page++;
+    const url = p => `https://api.github.com/repos/${REPO}/issues?state=all&sort=updated&direction=desc&per_page=100&page=${p}`;
+    const r = await fetch(url(1), { headers: etag ? {"If-None-Match": etag} : {}, cache:"no-store" });
+    if (r.status===304){ setSync("ok"); return; }
+    if (!r.ok) throw new Error(r.status===403||r.status===429 ? T("e403") : r.status===404 ? T("e404")(REPO) : T("efail")+r.status);
+    const newTag = r.headers.get("ETag")||"";
+    let all = await r.json(), page=2, d=all;
+    while (d.length===100 && page<=5){
+      const r2 = await fetch(url(page), {cache:"no-store"}); if(!r2.ok) break;
+      d = await r2.json(); all = all.concat(d); page++;
     }
+    etag = newTag;
     tasks = all.filter(i=>!i.pull_request).map(i=>{
       const f = parseBody(i.body);
       let status = statusCode(f.status);
@@ -180,11 +205,18 @@ async function load(force){
         updated: i.updated_at
       };
     });
-    try{ localStorage.setItem(key, JSON.stringify({t:Date.now(), d:tasks})); }catch(e){}
-    tasks.forEach(t=>{ t.start=t.start&&new Date(t.start); t.due=t.due&&new Date(t.due); });
+    try{ localStorage.setItem(key, JSON.stringify({t:Date.now(), e:etag, d:tasks})); }catch(e){}
+    const sl = gantt.scrollLeft;
     render();
-  }catch(e){ showMsg("⚠️ "+e.message); }
+    if (view==="gantt" && lastSync) gantt.scrollLeft = sl;
+    setSync("ok");
+  }catch(e){
+    setSync("err", e.message);
+    if (!tasks.length) showMsg("⚠️ "+e.message);
+  }
 }
+setInterval(()=>{ if(!document.hidden) load(); }, POLL_MS);
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) load(); });
 function hydrate(){ tasks.forEach(t=>{ if(t.start&&!(t.start instanceof Date)) t.start=new Date(t.start); if(t.due&&!(t.due instanceof Date)) t.due=new Date(t.due); }); }
 function showMsg(m){ const e=document.getElementById("msg"); e.hidden=false; e.innerHTML=m; document.getElementById("gantt").hidden=true; document.getElementById("list").hidden=true; }
 
@@ -263,7 +295,7 @@ function renderGantt(list){
     </div></div>`;
   gantt.querySelectorAll(".bar[data-n]").forEach(b=>b.onclick=()=>openPop(+b.dataset.n));
   // 自动滚到今天
-  gantt.scrollLeft = Math.max(0, x(today) - gantt.clientWidth/3);
+  if (!lastSync) gantt.scrollLeft = Math.max(0, x(today) - gantt.clientWidth/3);
 }
 
 function renderList(list){
@@ -301,7 +333,7 @@ pop.onclick = e => { if(e.target===pop) pop.style.display="none"; };
 document.querySelectorAll("#view button").forEach(b=>b.onclick=()=>{view=b.dataset.v;document.querySelectorAll("#view button").forEach(x=>x.classList.toggle("on",x===b));render();});
 document.querySelectorAll("#zoom button").forEach(b=>b.onclick=()=>{zoom=b.dataset.z;document.querySelectorAll("#zoom button").forEach(x=>x.classList.toggle("on",x===b));render();});
 refresh.onclick=()=>load(true);
-document.getElementById("lang").onclick=()=>{ lang = lang==="zh"?"en":"zh"; try{localStorage.setItem("pt_lang",lang);}catch(e){} applyLang(); if(tasks.length) render(); else load(); };
+document.getElementById("lang").onclick=()=>{ lang = lang==="zh"?"en":"zh"; try{localStorage.setItem("pt_lang",lang);}catch(e){} applyLang(); drawSync(); if(tasks.length) render(); else load(); };
 applyLang();
 load();
 </script>

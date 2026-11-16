@@ -1,44 +1,44 @@
-name: 📌 新任务 / New Task
-description: 新增一个项目任务到时间线
-title: "任务名称"
+name: 📌 新任务 New Task
+description: 新增一个任务到时间线 / Add a task to the timeline
+title: "任务名称 Task name"
 body:
   - type: input
     id: project
     attributes:
-      label: 项目
-      description: 属于哪个项目（同名会分在一组）
-      placeholder: 例如 3CC Event / AI Kan
+      label: 项目 Project
+      description: 同名会分在一组 / Same name = same group
+      placeholder: 3CC Event
     validations:
       required: true
   - type: input
     id: start
     attributes:
-      label: 开始日期
+      label: 开始日期 Start date
       placeholder: "2026-11-20"
     validations:
       required: true
   - type: input
     id: due
     attributes:
-      label: 截止日期
+      label: 截止日期 Due date
       placeholder: "2026-11-30"
     validations:
       required: true
   - type: dropdown
     id: status
     attributes:
-      label: 状态
+      label: 状态 Status
       options:
-        - 未开始
-        - 进行中
-        - 卡住
-        - 已完成
+        - 未开始 Not started
+        - 进行中 In progress
+        - 卡住 Blocked
+        - 已完成 Done
     validations:
       required: true
   - type: dropdown
     id: progress
     attributes:
-      label: 进度
+      label: 进度 Progress
       options:
         - "0%"
         - "10%"
@@ -52,5 +52,5 @@ body:
   - type: textarea
     id: notes
     attributes:
-      label: 备注
-      placeholder: 细节、链接、需要谁帮忙…
+      label: 备注 Notes
+      placeholder: 细节、链接、需要谁帮忙 / Details, links, help needed
